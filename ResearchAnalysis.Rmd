@@ -1,5 +1,5 @@
 ---
-title: "Impact of Major Storms and Weather Events in the United States of America"
+title: "Threat of Major Storms and Weather Events in the United States of America"
 author: "Manuel A. Cerda R."
 date: "23 April 2016"
 output: html_document
@@ -28,8 +28,110 @@ The events in the database start in the year 1950 and end in November 2011. In t
 
 ##Data Processing
 
-```{r loadMD, results='hide', echo=T, message=F, warning=F, cache=T, tidy=T}
+```{r libraries, results='hide', echo=T, message=F, warning=F, cache=T, tidy=T}
+library(dplyr)
+library(plyr)
+library(data.table)
+library(ggplot2)
+library(maps)
+library(mapproj)
+```
+
+```{r rawdata, results='hide', echo=T, message=F, warning=F, cache=T, tidy=T}
+# Load the data after extracted from the compressed file
 rawData <- read.csv(file.path(getwd(), "repdata-data-StormData.csv", fsep = .Platform$file.sep))
 ```
 
+```{r threat, results='hide', echo=T, message=F, warning=F, cache=T, tidy=T}
+# Separate the number of injuries by State
+injuries <- subset(ddply(rawData, "STATE", summarise, injuries = sum(INJURIES)), STATE %in% state.abb)
+injuries$region <- state.name[match(injuries$STATE,state.abb)]
+
+#Separate the number of fatalities by State
+fatalities <- subset(ddply(rawData, "STATE", summarise, fatalities = sum(FATALITIES)), STATE %in% state.abb)
+fatalities$region <- state.name[match(fatalities$STATE,state.abb)]
+```
+
+```{r summary, results='as-is', echo=T, message=F, warning=F, cache=T, tidy=T}
+# Show summary of the observations
+nrow(rawData)
+colnames(rawData)
+summary(injuries$injuries)
+summary(fatalities$fatalities)
+```
+
+```{r us_map_by_injury, results='as-is', echo=T, message=F, warning=F, cache=T, tidy=T}
+# Plot the Amount of People Injured by Weather Events in the U.S. during 1950 - 2011
+us <- map_data("state")
+
+gg <- ggplot() +
+  geom_map(data=us, map=us,
+                    aes(x=long, y=lat, map_id=region),
+                    fill="white", color="black", size=0.15) +
+  geom_map(data=injuries, map=us,
+                    aes(fill=injuries, map_id=tolower(region)),
+                    color="black", size=0.15) +
+  scale_fill_continuous(low='white', high='orange', 
+                                 guide='colorbar') +
+  ggtitle("Amount of People Injured by Weather Events in the U.S. during 1950 - 2011") +
+  labs(x=NULL, y=NULL) +
+  coord_map("albers", lat0 = 39, lat1 = 45) +
+  theme(panel.border = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  theme(axis.text = element_blank())
+gg
+```
+
+```{r us_map_by_fatalities, results='as-is', echo=T, message=F, warning=F, cache=T, tidy=T}
+# Plot the Amount of People Killed by Weather Events in the U.S. during 1950 - 2011
+gg2 <- ggplot() +
+  geom_map(data=us, map=us,
+                    aes(x=long, y=lat, map_id=region),
+                    fill="white", color="black", size=0.15) +
+  geom_map(data=fatalities, map=us,
+                    aes(fill=fatalities, map_id=tolower(region)),
+                    color="black", size=0.15) +
+  scale_fill_continuous(low='white', high='red', 
+                                 guide='colorbar') +
+  ggtitle("Amount of People Killed by Weather Events in the U.S. during 1950 - 2011") +
+  labs(x=NULL, y=NULL) +
+  coord_map("albers", lat0 = 39, lat1 = 45) +
+  theme(panel.border = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  theme(axis.text = element_blank())
+gg2
+```
+
+```{r moment_of_threat, results='as-is', echo=T, message=F, warning=F, cache=T, tidy=T}
+#Plot the Total Number of Weather Events per Hour in the U.S. during 1950 - 2011
+rawTimeData <- subset(rawData, select=c("BGN_TIME"))
+rawTimeData$BGN_TIME <- sapply(rawTimeData$BGN_TIME, FUN=function(x){
+  if(nchar(as.character(x)) > 4)
+    return(strftime(strptime(x, format="%H:%M:%S %r"), format="%H"))
+  else
+    return(strftime(strptime(x, format="%H%M"), format="%H"))
+})
+
+timeData <- ddply(rawTimeData, "BGN_TIME", summarise, COUNT= length(BGN_TIME))
+timeData <- timeData[complete.cases(timeData),]
+rushHour <- max(timeData$COUNT)
+
+p1 <- qplot(BGN_TIME, COUNT, data=timeData, geom="point", fill=COUNT, color=COUNT) +
+  ggtitle("Total Number of Weather Events per Hour in the U.S. during 1950 - 2011") +
+  labs(x="24 Hours Scale", y="Major Storms and Weather Events") +
+  theme(panel.border = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(axis.text = element_blank())
+p1
+```
+
+
 ##Results
+
+This study has demonstrated the threats bue to major storms and severe weather events in the United States of America. 
+
++ After exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database, It has become evident that the State of **Texas** is the most affected by a maximum of **`r format(max(injuries$injuries), big.mark=",", scientific=FALSE)`** injuries and **`r format(max(fatalities$fatalities), big.mark=",", scientific=FALSE)`** fatalities from **1950** to **2011**.
+
++ Most events have occurred in the afternoon at around **`r strftime(strptime(timeData$BGN_TIME[timeData$COUNT == rushHour], format="%H"), format="%H:%M")`**
